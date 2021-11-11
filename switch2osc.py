@@ -6,7 +6,7 @@ import time
 
 import pprint
 
-sent_on = []
+sent = {}
 
 
 def send_dict(addr, input):
@@ -14,10 +14,14 @@ def send_dict(addr, input):
         for key, value in input.items():
             send_dict(addr + '/' + key, value)
     else:
-        osc.send_message(addr, input)
-        if addr not in sent_on:
+        if addr not in sent:
+            osc.send_message(addr, input)
             print(f'Sent on {addr}')
-            sent_on.append(addr)
+            sent[addr] = input
+        elif abs(sent[addr] - input) > 1e-2:
+            osc.send_message(addr, input)
+            sent[addr] = input
+
 
 class Scaler:
     def __init__(self, min=0, max=1):
