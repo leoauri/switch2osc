@@ -44,7 +44,7 @@ class Scaler:
         else:
             return self.scale((x - self.min_in) / (self.max_in - self.min_in))
 
-class Acummulator:
+class Accumulator:
     def __init__(self):
         self.total = 0
 
@@ -86,8 +86,10 @@ if joycon_r is not None:
     pp.pprint(joycon_r.get_status())
 
 sclr = Scaler()
-accum_twist = Acummulator()
+accum_twist = Accumulator()
 sclr_twist = Scaler()
+sclr_l_y = Scaler()
+accum_l_y = Accumulator()
 
 while True:
     if joycon_l is not None:
@@ -98,5 +100,7 @@ while True:
         jc_r = joycon_r.get_status()
         send_dict('/joycon_r', jc_r)
         send_dict('/stick_r_h', sclr(jc_r['analog-sticks']['right']['horizontal']))
+        # send_dict('/l_y', sclr_l_y(jc_l['accel']['y']))
+        send_dict('/l_y', sclr_l_y(accum_l_y(jc_l['gyro']['y'])))
 
     time.sleep(wait_time)
