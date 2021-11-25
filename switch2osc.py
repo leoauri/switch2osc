@@ -7,6 +7,17 @@ import time
 import pprint
 
 sent = {}
+scalers = {}
+accums = {}
+accum_scalers = {}
+
+
+def send_to(addr, input, eps=1e-4):
+    if addr not in sent or abs(sent[addr] - input) > eps:
+        osc.send_message(addr, input)
+        if addr not in sent:
+            print(f'Sent on {addr}')
+        sent[addr] = input
 
 
 def send_dict(addr, input):
@@ -14,13 +25,14 @@ def send_dict(addr, input):
         for key, value in input.items():
             send_dict(addr + '/' + key, value)
     else:
-        if addr not in sent:
-            osc.send_message(addr, input)
-            print(f'Sent on {addr}')
-            sent[addr] = input
-        elif abs(sent[addr] - input) > 1e-2:
-            osc.send_message(addr, input)
-            sent[addr] = input
+        if addr not in scalers:
+            scalers[addr] = Scaler()
+            accums[addr] = Accumulator()
+            accum_scalers[addr] = Scaler()
+
+        send_to(addr, input)
+        send_to(addr + '/scaled', scalers[addr](input))
+        send_to(addr + '/accum', accum_scalers[addr](accums[addr](input)))
 
 
 class Scaler:
@@ -71,7 +83,7 @@ except ValueError:
 
 osc = udp_client.SimpleUDPClient("127.0.0.1", 7331)
 
-wait_time = 0.005
+wait_time = 0.01
 if wait_time != 0:
     print(f'Running at {1/wait_time} Hz, refresh {wait_time*1000} ms')
 
@@ -85,22 +97,12 @@ if joycon_r is not None:
     print('Right joycon connected')
     pp.pprint(joycon_r.get_status())
 
-sclr = Scaler()
-accum_twist = Accumulator()
-sclr_twist = Scaler()
-sclr_l_y = Scaler()
-accum_l_y = Accumulator()
-
 while True:
     if joycon_l is not None:
         jc_l = joycon_l.get_status()
         send_dict('/joycon_l', jc_l)
-        send_dict('/twist_l', sclr_twist(accum_twist(jc_l['gyro']['x'])))
     if joycon_r is not None:
         jc_r = joycon_r.get_status()
         send_dict('/joycon_r', jc_r)
-        send_dict('/stick_r_h', sclr(jc_r['analog-sticks']['right']['horizontal']))
-        # send_dict('/l_y', sclr_l_y(jc_l['accel']['y']))
-        send_dict('/l_y', sclr_l_y(accum_l_y(jc_l['gyro']['y'])))
 
     time.sleep(wait_time)
