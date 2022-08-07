@@ -7,11 +7,15 @@ from ischedule import run_loop, schedule
 import time 
 import pprint
 import argparse
+from collections import Counter
+
 
 parser = argparse.ArgumentParser(
         description='Bridge Nintendo switch controllers to OSC signals.')
 parser.add_argument('--scalers', action='store_true', 
         help='Add scaled and accumulated sends')
+parser.add_argument('--stats_every', type=float, 
+        help='Show stats every STATS_EVERY seconds')
 
 args = parser.parse_args()
 
@@ -45,6 +49,25 @@ class Accumulator:
         self.total += x
         return self.total
 
+class Stats:
+    def __init__(self):
+        self.counter = Counter()
+        self.stamp = time.perf_counter()
+
+    def count(self, addr):
+        self.counter.update([addr])
+
+    def print_stats(self):
+        print()
+        now = time.perf_counter()
+        for addr, count in sorted(self.counter.items()):
+            print(f'{addr} at {count/(now-self.stamp)} Hz')
+        self.counter.clear()
+        self.stamp = time.perf_counter()
+
+
+if args.stats_every is not None:
+    stats = Stats()
 
 sent = {}
 if args.scalers:
@@ -58,6 +81,8 @@ def send_to(addr, input, eps=1e-3):
         osc.send_message(addr, input)
         if addr not in sent:
             print(f'Sent on {addr}')
+        if args.stats_every is not None:
+            stats.count(addr)
         sent[addr] = input
 
 
@@ -118,5 +143,7 @@ def update_joycons():
         jc_r = joycon_r.get_status()
         send_dict('/joycon_r', jc_r)
 
+if args.stats_every is not None:
+    schedule(stats.print_stats, interval=args.stats_every)
 
 run_loop()
