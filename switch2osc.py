@@ -3,36 +3,15 @@ from pyjoycon import JoyCon, get_L_id, get_R_id
 from pythonosc import udp_client
 
 import time 
-
 import pprint
+import argparse
 
-sent = {}
-scalers = {}
-accums = {}
-accum_scalers = {}
+parser = argparse.ArgumentParser(
+        description='Bridge Nintendo switch controllers to OSC signals.')
+parser.add_argument('--scalers', action='store_true', 
+        help='Add scaled and accumulated sends')
 
-
-def send_to(addr, input, eps=1e-4):
-    if addr not in sent or abs(sent[addr] - input) > eps:
-        osc.send_message(addr, input)
-        if addr not in sent:
-            print(f'Sent on {addr}')
-        sent[addr] = input
-
-
-def send_dict(addr, input):
-    if isinstance(input, dict):
-        for key, value in input.items():
-            send_dict(addr + '/' + key, value)
-    else:
-        if addr not in scalers:
-            scalers[addr] = Scaler()
-            accums[addr] = Accumulator()
-            accum_scalers[addr] = Scaler()
-
-        send_to(addr, input)
-        send_to(addr + '/scaled', scalers[addr](input))
-        send_to(addr + '/accum', accum_scalers[addr](accums[addr](input)))
+args = parser.parse_args()
 
 
 class Scaler:
@@ -65,6 +44,37 @@ class Accumulator:
         return self.total
 
 
+sent = {}
+if args.scalers:
+    scalers = {}
+    accums = {}
+    accum_scalers = {}
+
+
+def send_to(addr, input, eps=1e-3):
+    if addr not in sent or abs(sent[addr] - input) > eps:
+        osc.send_message(addr, input)
+        if addr not in sent:
+            print(f'Sent on {addr}')
+        sent[addr] = input
+
+
+def send_dict(addr, input):
+    if isinstance(input, dict):
+        for key, value in input.items():
+            send_dict(addr + '/' + key, value)
+    else:
+        if args.scalers and addr not in scalers:
+            scalers[addr] = Scaler()
+            accums[addr] = Accumulator()
+            accum_scalers[addr] = Scaler()
+
+        send_to(addr, input)
+        if args.scalers:
+            send_to(addr + '/scaled', scalers[addr](input))
+            send_to(addr + '/accum', accum_scalers[addr](accums[addr](input)))
+
+
 
 joycon_id_l = get_L_id()
 joycon_id_r = get_R_id()
@@ -83,7 +93,7 @@ except ValueError:
 
 osc = udp_client.SimpleUDPClient("127.0.0.1", 7331)
 
-wait_time = 0.01
+wait_time = 0.02
 if wait_time != 0:
     print(f'Running at {1/wait_time} Hz, refresh {wait_time*1000} ms')
 
