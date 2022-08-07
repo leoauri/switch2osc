@@ -53,6 +53,13 @@ class Stats:
     def __init__(self):
         self.counter = Counter()
         self.stamp = time.perf_counter()
+        self.sent = {}
+
+    def record(self, addr, val):
+        if addr not in self.sent:
+            self.sent[addr] = []
+        self.sent[addr].append(val)
+        self.count(addr)
 
     def count(self, addr):
         self.counter.update([addr])
@@ -61,8 +68,10 @@ class Stats:
         print()
         now = time.perf_counter()
         for addr, count in sorted(self.counter.items()):
-            print(f'{addr} at {count/(now-self.stamp)} Hz')
+            r = max(self.sent[addr]) - min(self.sent[addr])
+            print(f'{addr} at {count/(now-self.stamp)} Hz, range {r}')
         self.counter.clear()
+        self.sent = {}
         self.stamp = time.perf_counter()
 
 
@@ -82,7 +91,7 @@ def send_to(addr, input, eps=1e-3):
         if addr not in sent:
             print(f'Sent on {addr}')
         if args.stats_every is not None:
-            stats.count(addr)
+            stats.record(addr, input)
         sent[addr] = input
 
 
