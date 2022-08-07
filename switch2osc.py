@@ -69,7 +69,15 @@ class Stats:
         now = time.perf_counter()
         for addr, count in sorted(self.counter.items()):
             r = max(self.sent[addr]) - min(self.sent[addr])
-            print(f'{addr} at {count/(now-self.stamp)} Hz, range {r}')
+            try:
+                m = max([b-a for a,b in 
+                        zip(self.sent[addr], self.sent[addr][1:])])
+            except ValueError:
+                m = None
+
+            print(f'{addr} at {count/(now-self.stamp)} Hz, range {r}',
+                    end='')
+            print('' if m is None else f', max epsilon {m}')
         self.counter.clear()
         self.sent = {}
         self.stamp = time.perf_counter()
