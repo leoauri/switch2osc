@@ -2,6 +2,8 @@ from pyjoycon import JoyCon, get_L_id, get_R_id
 
 from pythonosc import udp_client
 
+from ischedule import run_loop, schedule
+
 import time 
 import pprint
 import argparse
@@ -107,7 +109,8 @@ if joycon_r is not None:
     print('Right joycon connected')
     pp.pprint(joycon_r.get_status())
 
-while True:
+@schedule(interval=wait_time)
+def update_joycons():
     if joycon_l is not None:
         jc_l = joycon_l.get_status()
         send_dict('/joycon_l', jc_l)
@@ -115,4 +118,5 @@ while True:
         jc_r = joycon_r.get_status()
         send_dict('/joycon_r', jc_r)
 
-    time.sleep(wait_time)
+
+run_loop()
