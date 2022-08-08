@@ -123,6 +123,9 @@ def send_dict(addr, input):
 joycon_id_l = get_L_id()
 joycon_id_r = get_R_id()
 
+# Hopefully, this avoids occasional "THREAD carefully" error
+time.sleep(1)
+
 try:
     joycon_l = JoyCon(*joycon_id_l)
 except ValueError:
