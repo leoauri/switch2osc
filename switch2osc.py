@@ -99,12 +99,15 @@ if args.scalers:
 
 
 class Sender:
-    def __init__(self, calibration_trigger=None):
+    def __init__(self, calibration_trigger=None, discard_samples=10):
         self.eps = {}
         self.last_sent = {}
         self.calibrate_until = None
         self.calibrating = False
         self.calibration_trigger = calibration_trigger
+        # for some reason, individual controllers produce bogus initial
+        # values.  Throw away some of the initial calibration examples
+        self.discard_samples = discard_samples
 
     def start_calibrate(self, calibration_time=2):
         print(f'Calibrate for {calibration_time} seconds')
@@ -122,6 +125,7 @@ class Sender:
                     if k.startswith(a)})
         # calculate epsilons
         for addr, vals in self.sent.items():
+            vals = vals[self.discard_samples:]
             try:
                 e = max([abs(b-a) for a,b in zip(vals, vals[1:])])
             except ValueError:
