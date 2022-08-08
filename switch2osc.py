@@ -16,6 +16,12 @@ parser.add_argument('--scalers', action='store_true',
         help='Add scaled and accumulated sends')
 parser.add_argument('--stats_every', type=float, 
         help='Show stats every STATS_EVERY seconds')
+parser.add_argument('--show_addresses', action='store_true',
+        help='Log addresses which have been sent to')
+parser.add_argument('--show_epsilons', action='store_true',
+        help='Show calculated epsilons when calibrating')
+parser.add_argument('--show_calibration_data', nargs='+', type=str,
+        help='Show calibration data by specifying address (or address subset)')
 
 args = parser.parse_args()
 
@@ -86,26 +92,73 @@ class Stats:
 if args.stats_every is not None:
     stats = Stats()
 
-sent = {}
 if args.scalers:
     scalers = {}
     accums = {}
     accum_scalers = {}
 
 
-def send_to(addr, input, eps=1e-3):
-    if addr not in sent or abs(sent[addr] - input) > eps:
-        osc.send_message(addr, input)
-        if addr not in sent:
-            print(f'Sent on {addr}')
-        if args.stats_every is not None:
-            stats.record(addr, input)
-        sent[addr] = input
+class Sender:
+    def __init__(self, calibration_trigger=None):
+        self.eps = {}
+        self.last_sent = {}
+        self.calibrate_until = None
+        self.calibrating = False
+        self.calibration_trigger = calibration_trigger
+
+    def start_calibrate(self, calibration_time=2):
+        print(f'Calibrate for {calibration_time} seconds')
+        self.calibrating = True
+        self.calibrate_until = time.perf_counter() + calibration_time
+        self.sent = {}
+        self.eps = {}
+
+    def finish_calibrate(self):
+        self.calibrating = False
+        if args.show_calibration_data is not None:
+            print('Collected calibration data:')
+            for a in args.show_calibration_data:
+                pp.pprint({k: v for k,v in self.sent.items() 
+                    if k.startswith(a)})
+        # calculate epsilons
+        for addr, vals in self.sent.items():
+            try:
+                e = max([abs(b-a) for a,b in zip(vals, vals[1:])])
+            except ValueError:
+                e = None
+            if e is not None:
+                self.eps[addr] = e
+        print('Finished calibration')
+        if args.show_epsilons:
+            print('Calculated epsilons:')
+            pp.pprint(self.eps)
+
+    def send_to(self, addr, val):
+        if (not self.calibrating and 
+                (len(self.eps) == 0 or (addr,val) == self.calibration_trigger)):
+            self.start_calibrate()
+        if self.calibrating and time.perf_counter() > self.calibrate_until:
+            self.finish_calibrate()
+        if self.calibrating:
+            if addr not in self.sent:
+                self.sent[addr] = []
+            self.sent[addr].append(val)
+        else:
+            if (addr not in self.last_sent or addr not in self.eps 
+                    or abs(self.last_sent[addr] - val) > self.eps[addr]):
+                osc.send_message(addr, val)
+                if args.show_addresses and addr not in self.last_sent:
+                    print(f'Sent on {addr}')
+                self.last_sent[addr] = val
+                if args.stats_every is not None:
+                    stats.record(addr, val)
 
 
-def send_dict(addr, input):
-    if isinstance(input, dict):
-        for key, value in input.items():
+sender = Sender(calibration_trigger=('/joycon_r/buttons/shared/home', 1))
+
+def send_dict(addr, val):
+    if isinstance(val, dict):
+        for key, value in val.items():
             send_dict(addr + '/' + key, value)
     else:
         if args.scalers and addr not in scalers:
@@ -113,10 +166,11 @@ def send_dict(addr, input):
             accums[addr] = Accumulator()
             accum_scalers[addr] = Scaler()
 
-        send_to(addr, input)
+        sender.send_to(addr, val)
         if args.scalers:
-            send_to(addr + '/scaled', scalers[addr](input))
-            send_to(addr + '/accum', accum_scalers[addr](accums[addr](input)))
+            sender.send_to(addr + '/scaled', scalers[addr](val))
+            sender.send_to(
+                    addr + '/accum', accum_scalers[addr](accums[addr](val)))
 
 
 
