@@ -15,8 +15,8 @@ parser = argparse.ArgumentParser(
         description='Bridge Nintendo switch controllers to OSC signals.')
 parser.add_argument('--scalers', action='store_true', 
         help='Add scaled and accumulated sends')
-parser.add_argument('--stats_every', type=float, 
-        help='Show stats every STATS_EVERY seconds')
+parser.add_argument('--stats_every', type=float, metavar='SECONDS',
+        help='Show stats every SECONDS seconds')
 parser.add_argument('--show_addresses', action='store_true',
         help='Log addresses which have been sent to')
 parser.add_argument('--show_epsilons', action='store_true',
@@ -25,8 +25,9 @@ parser.add_argument('--show_zeroing', action='store_true',
         help='Show stats when zeroing controllers')
 parser.add_argument('--dump_example', action='store_true',
         help='Dump single example of captured controller data')
-parser.add_argument('--show_calibration_data', nargs='+', type=str,
-        help='Show calibration data by specifying address (or address subset)')
+parser.add_argument('--show_calib_data', nargs='+', type=str, 
+        metavar='ADDRESS_PART',
+        help='Dump collected calibration data for addresses')
 
 args = parser.parse_args()
 
@@ -129,9 +130,9 @@ class Sender:
 
     def finish_calibrate(self):
         self.calibrating = False
-        if args.show_calibration_data is not None:
+        if args.show_calib_data is not None:
             print('Collected calibration data:')
-            for a in args.show_calibration_data:
+            for a in args.show_calib_data:
                 pp.pprint({k: v for k,v in self.sent.items() 
                     if k.startswith(a)})
         # calculate epsilons
