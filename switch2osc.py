@@ -8,6 +8,7 @@ import time
 import pprint
 import argparse
 from collections import Counter
+from math import floor
 
 
 parser = argparse.ArgumentParser(
@@ -20,6 +21,8 @@ parser.add_argument('--show_addresses', action='store_true',
         help='Log addresses which have been sent to')
 parser.add_argument('--show_epsilons', action='store_true',
         help='Show calculated epsilons when calibrating')
+parser.add_argument('--show_zeroing', action='store_true',
+        help='Show stats when zeroing controllers')
 parser.add_argument('--dump_example', action='store_true',
         help='Dump single example of captured controller data')
 parser.add_argument('--show_calibration_data', nargs='+', type=str,
@@ -101,7 +104,8 @@ if args.scalers:
 
 
 class Sender:
-    def __init__(self, calibration_trigger=None, discard_samples=10):
+    def __init__(self, calibration_trigger=None, zero_triggers={}, 
+            discard_samples=10):
         self.eps = {}
         self.last_sent = {}
         self.calibrate_until = None
@@ -110,6 +114,11 @@ class Sender:
         # for some reason, individual controllers produce bogus initial
         # values.  Throw away some of the initial calibration examples
         self.discard_samples = discard_samples
+
+        self.zero_triggers = zero_triggers
+        self.zero_until = {}
+        self.zero_data = {}
+        self.modes = {}
 
     def start_calibrate(self, calibration_time=2):
         print(f'Calibrate for {calibration_time} seconds')
@@ -139,7 +148,54 @@ class Sender:
             print('Calculated epsilons:')
             pp.pprint(self.eps)
 
+    @staticmethod
+    def mode(vals, min_vals=10):
+        if len(vals) == 0:
+            return None
+        mini = min(vals)
+        maxi = max(vals)
+        if mini == maxi:
+            return mini
+        if len(vals) < min_vals:
+            return sum(vals) / len(vals)
+        buckets = {}
+        for val in vals:
+            bucket = floor(10*(val-mini)/(maxi-mini))
+            if bucket not in buckets:
+                buckets[bucket] = []
+            buckets[bucket].append(val)
+        biggest = max(buckets.values(), key=len)
+        return Sender.mode(biggest)
+
+
+    def maybe_zero(self, addr, val):
+        if (addr, val) in self.zero_triggers:
+            address_part = self.zero_triggers[(addr, val)]
+            if address_part not in self.zero_until:
+                print(f'Zeroing {address_part}')
+            self.zero_until[address_part] = time.perf_counter() + 2
+        for a, until in self.zero_until.copy().items():
+            if time.perf_counter() > until:
+                del self.zero_until[a]
+                # get list of addresses which were covered by zeroing
+                zaddrs = [addr for addr in self.zero_data.keys() if a in addr]
+                for za in zaddrs:
+                    # calculate mode of sampled data
+                    self.modes[za] = Sender.mode(self.zero_data[za])
+                    if args.show_zeroing:
+                        print(f'Zeroed {za} to {self.modes[za]}')
+                    # empty collected zero data
+                    del self.zero_data[za]
+                print(f'Finished zeroing {a}')
+            else:
+                if a in addr:
+                    if addr not in self.zero_data:
+                        self.zero_data[addr] = []
+                    self.zero_data[addr].append(val)
+
+
     def send_to(self, addr, val):
+        self.maybe_zero(addr, val)
         if (not self.calibrating and 
                 (len(self.eps) == 0 or (addr,val) == self.calibration_trigger)):
             self.start_calibrate()
@@ -150,6 +206,8 @@ class Sender:
                 self.sent[addr] = []
             self.sent[addr].append(val)
         else:
+            if addr in self.modes and self.modes[addr] is not None:
+                val -= self.modes[addr]
             if (addr not in self.last_sent or addr not in self.eps 
                     or abs(self.last_sent[addr] - val) > self.eps[addr]):
                 osc.send_message(addr, val)
@@ -159,8 +217,10 @@ class Sender:
                 if args.stats_every is not None:
                     stats.record(addr, val)
 
-
-sender = Sender(calibration_trigger=('/joycon_r/buttons/shared/home', 1))
+sender = Sender(zero_triggers={
+    ('/joycon_r/buttons/shared/home', 1): '/joycon_r',
+    ('/joycon_l/buttons/shared/capture', 1): '/joycon_l'    
+})
 
 def send_dict(addr, val):
     if isinstance(val, dict):
