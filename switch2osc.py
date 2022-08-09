@@ -20,6 +20,8 @@ parser.add_argument('--show_addresses', action='store_true',
         help='Log addresses which have been sent to')
 parser.add_argument('--show_epsilons', action='store_true',
         help='Show calculated epsilons when calibrating')
+parser.add_argument('--dump_example', action='store_true',
+        help='Dump single example of captured controller data')
 parser.add_argument('--show_calibration_data', nargs='+', type=str,
         help='Show calibration data by specifying address (or address subset)')
 
@@ -206,11 +208,13 @@ pp = pprint.PrettyPrinter(indent=4)
 
 if joycon_l is not None:
     print('Left joycon connected')
-    pp.pprint(joycon_l.get_status())
+    if args.dump_example:
+        pp.pprint(joycon_l.get_status())
 
 if joycon_r is not None:
     print('Right joycon connected')
-    pp.pprint(joycon_r.get_status())
+    if args.dump_example:
+        pp.pprint(joycon_r.get_status())
 
 @schedule(interval=wait_time)
 def update_joycons():
