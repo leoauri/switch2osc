@@ -13,6 +13,8 @@ from math import floor
 
 parser = argparse.ArgumentParser(
         description='Bridge Nintendo switch controllers to OSC signals.')
+parser.add_argument('--port', type=int,
+        help='Port to use for OSC server (Default 7331).')
 parser.add_argument('--scalers', action='store_true', 
         help='Add scaled and accumulated sends')
 parser.add_argument('--stats_every', type=float, metavar='SECONDS',
@@ -259,7 +261,11 @@ except ValueError:
     print('Could not connect right joycon')
     joycon_r = None
 
-osc = udp_client.SimpleUDPClient("127.0.0.1", 7331)
+osc = udp_client.SimpleUDPClient(
+    "127.0.0.1", 
+    7331 if args.port is None else args.port,
+    allow_broadcast=True
+)
 
 wait_time = 0.02
 if wait_time != 0:
