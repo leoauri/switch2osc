@@ -310,21 +310,20 @@ def update_joycons():
                 pp.pprint(joycon_r.get_status())
 
     if joycon_l is not None:
-        try:
+        if joycon_l.connected.is_set():
             jc_l = joycon_l.get_status()
             sender_l.send_dict("/joycon_l", jc_l)
-        except OSError:
+        else:
             joycon_l = None
             print("Lost left joycon, waiting to reconnect...")
 
     if joycon_r is not None:
-        try:
+        if joycon_r.connected.is_set():
             jc_r = joycon_r.get_status()
             sender_r.send_dict("/joycon_r", jc_r)
-        except OSError:
+        else:
             joycon_r = None
             print("Lost right joycon, waiting to reconnect...")
-
 
 if args.stats_every is not None:
     schedule(stats.print_stats, interval=args.stats_every)
