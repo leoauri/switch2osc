@@ -241,47 +241,24 @@ class Sender:
                 if args.stats_every is not None:
                     stats.record(addr, val)
 
-sender = Sender(zero_triggers={
-    ('/joycon_r/buttons/shared/home', 1): '/joycon_r',
-    ('/joycon_l/buttons/shared/capture', 1): '/joycon_l'    
-})
 
-def send_dict(addr, val):
-    if isinstance(val, dict):
-        for key, value in val.items():
-            send_dict(addr + '/' + key, value)
-    else:
-        if args.scalers and addr not in scalers:
-            scalers[addr] = Scaler()
-            accums[addr] = Accumulator()
-            accum_scalers[addr] = Scaler()
+    def send_dict(self, addr, val):
+        if isinstance(val, dict):
+            for key, value in val.items():
+                self.send_dict(addr + "/" + key, value)
+        else:
+            if args.scalers and addr not in scalers:
+                scalers[addr] = Scaler()
+                accums[addr] = Accumulator()
+                accum_scalers[addr] = Scaler()
 
-        sender.send_to(addr, val)
-        if args.scalers:
-            sender.send_to(addr + '/scaled', scalers[addr](val))
-            sender.send_to(
-                    addr + '/accum', accum_scalers[addr](accums[addr](val)))
+            self.send_to(addr, val)
+            if args.scalers:
+                self.send_to(addr + "/scaled", scalers[addr](val))
+                self.send_to(addr + "/accum", accum_scalers[addr](accums[addr](val)))
 
 
-
-joycon_id_l = get_L_id()
-joycon_id_r = get_R_id()
-
-# Hopefully, this avoids occasional "THREAD carefully" error
-time.sleep(1)
-
-try:
-    joycon_l = JoyCon(*joycon_id_l)
-except ValueError:
-    print('Could not connect left joycon')
-    joycon_l = None
-
-try:
-    joycon_r = JoyCon(*joycon_id_r)
-except ValueError:
-    print('Could not connect right joycon')
-    joycon_r = None
-
+# start OSC client
 osc = udp_client.SimpleUDPClient(
     "127.0.0.1", 7331 if args.port is None else args.port, allow_broadcast=True
 )
@@ -292,26 +269,65 @@ if wait_time != 0:
 
 pp = pprint.PrettyPrinter(indent=4)
 
-if joycon_l is not None:
-    print('Left joycon connected')
-    if args.dump_example:
-        pp.pprint(joycon_l.get_status())
+joycon_l = None
+joycon_r = None
 
-if joycon_r is not None:
-    print('Right joycon connected')
-    if args.dump_example:
-        pp.pprint(joycon_r.get_status())
+sender_l = Sender(
+    zero_triggers={
+        ("/joycon_l/buttons/shared/capture", 1): "/joycon_l",
+    }
+)
+
+sender_r = Sender(
+    zero_triggers={
+        ("/joycon_r/buttons/shared/home", 1): "/joycon_r",
+    }
+)
+
 
 @schedule(interval=wait_time)
 def update_joycons():
+    global joycon_l, joycon_r
+
+    if joycon_l is None:
+        try:
+            joycon_l = JoyCon(*get_L_id())
+        except (ValueError, OSError):
+            joycon_l = None
+        if joycon_l is not None:
+            print("Left joycon connected")
+            if args.dump_example:
+                pp.pprint(joycon_l.get_status())
+
+    if joycon_r is None:
+        try:
+            joycon_r = JoyCon(*get_R_id())
+        except (ValueError, OSError):
+            joycon_r = None
+        if joycon_r is not None:
+            print("Right joycon connected")
+            if args.dump_example:
+                pp.pprint(joycon_r.get_status())
+
     if joycon_l is not None:
-        jc_l = joycon_l.get_status()
-        send_dict('/joycon_l', jc_l)
+        try:
+            jc_l = joycon_l.get_status()
+            sender_l.send_dict("/joycon_l", jc_l)
+        except OSError:
+            joycon_l = None
+            print("Lost left joycon, waiting to reconnect...")
+
     if joycon_r is not None:
-        jc_r = joycon_r.get_status()
-        send_dict('/joycon_r', jc_r)
+        try:
+            jc_r = joycon_r.get_status()
+            sender_r.send_dict("/joycon_r", jc_r)
+        except OSError:
+            joycon_r = None
+            print("Lost right joycon, waiting to reconnect...")
+
 
 if args.stats_every is not None:
     schedule(stats.print_stats, interval=args.stats_every)
 
+print("Waiting for joycons...")
 run_loop()
