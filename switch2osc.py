@@ -4,7 +4,7 @@ from pythonosc import udp_client
 
 from ischedule import run_loop, schedule
 
-import time 
+import time
 import pprint
 import argparse
 from collections import Counter
@@ -12,24 +12,45 @@ from math import floor
 
 
 parser = argparse.ArgumentParser(
-        description='Bridge Nintendo switch controllers to OSC signals.')
-parser.add_argument('--port', type=int,
-        help='Port to use for OSC server (Default 7331).')
-parser.add_argument('--scalers', action='store_true', 
-        help='Add scaled and accumulated sends')
-parser.add_argument('--stats_every', type=float, metavar='SECONDS',
-        help='Show stats every SECONDS seconds')
-parser.add_argument('--show_addresses', action='store_true',
-        help='Log addresses which have been sent to')
-parser.add_argument('--show_epsilons', action='store_true',
-        help='Show calculated epsilons when calibrating')
-parser.add_argument('--show_zeroing', action='store_true',
-        help='Show stats when zeroing controllers')
-parser.add_argument('--dump_example', action='store_true',
-        help='Dump single example of captured controller data')
-parser.add_argument('--show_calib_data', nargs='+', type=str, 
-        metavar='ADDRESS_PART',
-        help='Dump collected calibration data for addresses')
+    description="Bridge Nintendo switch controllers to OSC signals."
+)
+parser.add_argument(
+    "--port", type=int, help="Port to use for OSC server (Default 7331)."
+)
+parser.add_argument(
+    "--scalers", action="store_true", help="Add scaled and accumulated sends"
+)
+parser.add_argument(
+    "--stats_every",
+    type=float,
+    metavar="SECONDS",
+    help="Show stats every SECONDS seconds",
+)
+parser.add_argument(
+    "--show_addresses",
+    action="store_true",
+    help="Log addresses which have been sent to",
+)
+parser.add_argument(
+    "--show_epsilons",
+    action="store_true",
+    help="Show calculated epsilons when calibrating",
+)
+parser.add_argument(
+    "--show_zeroing", action="store_true", help="Show stats when zeroing controllers"
+)
+parser.add_argument(
+    "--dump_example",
+    action="store_true",
+    help="Dump single example of captured controller data",
+)
+parser.add_argument(
+    "--show_calib_data",
+    nargs="+",
+    type=str,
+    metavar="ADDRESS_PART",
+    help="Dump collected calibration data for addresses",
+)
 
 args = parser.parse_args()
 
@@ -55,6 +76,7 @@ class Scaler:
         else:
             return self.scale((x - self.min_in) / (self.max_in - self.min_in))
 
+
 class Accumulator:
     def __init__(self):
         self.total = 0
@@ -62,6 +84,7 @@ class Accumulator:
     def __call__(self, x):
         self.total += x
         return self.total
+
 
 class Stats:
     def __init__(self):
@@ -84,14 +107,12 @@ class Stats:
         for addr, count in sorted(self.counter.items()):
             r = max(self.sent[addr]) - min(self.sent[addr])
             try:
-                m = max([b-a for a,b in 
-                        zip(self.sent[addr], self.sent[addr][1:])])
+                m = max([b - a for a, b in zip(self.sent[addr], self.sent[addr][1:])])
             except ValueError:
                 m = None
 
-            print(f'{addr} at {count/(now-self.stamp)} Hz, range {r}',
-                    end='')
-            print('' if m is None else f', max epsilon {m}')
+            print(f"{addr} at {count/(now-self.stamp)} Hz, range {r}", end="")
+            print("" if m is None else f", max epsilon {m}")
         self.counter.clear()
         self.sent = {}
         self.stamp = time.perf_counter()
@@ -107,8 +128,7 @@ if args.scalers:
 
 
 class Sender:
-    def __init__(self, calibration_trigger=None, zero_triggers={}, 
-            discard_samples=10):
+    def __init__(self, calibration_trigger=None, zero_triggers={}, discard_samples=10):
         self.eps = {}
         self.last_sent = {}
         self.calibrate_until = None
@@ -124,7 +144,7 @@ class Sender:
         self.modes = {}
 
     def start_calibrate(self, calibration_time=2):
-        print(f'Calibrate for {calibration_time} seconds')
+        print(f"Calibrate for {calibration_time} seconds")
         self.calibrating = True
         self.calibrate_until = time.perf_counter() + calibration_time
         self.sent = {}
@@ -133,22 +153,21 @@ class Sender:
     def finish_calibrate(self):
         self.calibrating = False
         if args.show_calib_data is not None:
-            print('Collected calibration data:')
+            print("Collected calibration data:")
             for a in args.show_calib_data:
-                pp.pprint({k: v for k,v in self.sent.items() 
-                    if k.startswith(a)})
+                pp.pprint({k: v for k, v in self.sent.items() if k.startswith(a)})
         # calculate epsilons
         for addr, vals in self.sent.items():
-            vals = vals[self.discard_samples:]
+            vals = vals[self.discard_samples :]
             try:
-                e = max([abs(b-a) for a,b in zip(vals, vals[1:])])
+                e = max([abs(b - a) for a, b in zip(vals, vals[1:])])
             except ValueError:
                 e = None
             if e is not None:
                 self.eps[addr] = e
-        print('Finished calibration')
+        print("Finished calibration")
         if args.show_epsilons:
-            print('Calculated epsilons:')
+            print("Calculated epsilons:")
             pp.pprint(self.eps)
 
     @staticmethod
@@ -163,19 +182,18 @@ class Sender:
             return sum(vals) / len(vals)
         buckets = {}
         for val in vals:
-            bucket = floor(10*(val-mini)/(maxi-mini))
+            bucket = floor(10 * (val - mini) / (maxi - mini))
             if bucket not in buckets:
                 buckets[bucket] = []
             buckets[bucket].append(val)
         biggest = max(buckets.values(), key=len)
         return Sender.mode(biggest)
 
-
     def maybe_zero(self, addr, val):
         if (addr, val) in self.zero_triggers:
             address_part = self.zero_triggers[(addr, val)]
             if address_part not in self.zero_until:
-                print(f'Zeroing {address_part}')
+                print(f"Zeroing {address_part}")
             self.zero_until[address_part] = time.perf_counter() + 2
         for a, until in self.zero_until.copy().items():
             if time.perf_counter() > until:
@@ -186,21 +204,21 @@ class Sender:
                     # calculate mode of sampled data
                     self.modes[za] = Sender.mode(self.zero_data[za])
                     if args.show_zeroing:
-                        print(f'Zeroed {za} to {self.modes[za]}')
+                        print(f"Zeroed {za} to {self.modes[za]}")
                     # empty collected zero data
                     del self.zero_data[za]
-                print(f'Finished zeroing {a}')
+                print(f"Finished zeroing {a}")
             else:
                 if a in addr:
                     if addr not in self.zero_data:
                         self.zero_data[addr] = []
                     self.zero_data[addr].append(val)
 
-
     def send_to(self, addr, val):
         self.maybe_zero(addr, val)
-        if (not self.calibrating and 
-                (len(self.eps) == 0 or (addr,val) == self.calibration_trigger)):
+        if not self.calibrating and (
+            len(self.eps) == 0 or (addr, val) == self.calibration_trigger
+        ):
             self.start_calibrate()
         if self.calibrating and time.perf_counter() > self.calibrate_until:
             self.finish_calibrate()
@@ -211,11 +229,14 @@ class Sender:
         else:
             if addr in self.modes and self.modes[addr] is not None:
                 val -= self.modes[addr]
-            if (addr not in self.last_sent or addr not in self.eps 
-                    or abs(self.last_sent[addr] - val) > self.eps[addr]):
+            if (
+                addr not in self.last_sent
+                or addr not in self.eps
+                or abs(self.last_sent[addr] - val) > self.eps[addr]
+            ):
                 osc.send_message(addr, val)
                 if args.show_addresses and addr not in self.last_sent:
-                    print(f'Sent on {addr}')
+                    print(f"Sent on {addr}")
                 self.last_sent[addr] = val
                 if args.stats_every is not None:
                     stats.record(addr, val)
@@ -262,14 +283,12 @@ except ValueError:
     joycon_r = None
 
 osc = udp_client.SimpleUDPClient(
-    "127.0.0.1", 
-    7331 if args.port is None else args.port,
-    allow_broadcast=True
+    "127.0.0.1", 7331 if args.port is None else args.port, allow_broadcast=True
 )
 
 wait_time = 0.02
 if wait_time != 0:
-    print(f'Running at {1/wait_time} Hz, refresh {wait_time*1000} ms')
+    print(f"Running at {1/wait_time} Hz, refresh {wait_time*1000} ms")
 
 pp = pprint.PrettyPrinter(indent=4)
 
