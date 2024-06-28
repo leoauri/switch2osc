@@ -1,0 +1,5 @@
+hidapi
+ischedule
+joycon-python @ git+https://github.com/leoauri/joycon-python.git@master
+python-osc
+pyglm
