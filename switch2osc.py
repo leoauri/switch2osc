@@ -357,5 +357,9 @@ def update_joycons():
 if args.stats_every is not None:
     schedule(stats.print_stats, interval=args.stats_every)
 
-print("Waiting for joycons...")
-run_loop()
+try:
+    print("Waiting for joycons...")
+    run_loop()
+except KeyboardInterrupt:
+    print()
+    print("Bridge ended.")
