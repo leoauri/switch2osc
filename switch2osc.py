@@ -209,6 +209,7 @@ class Sender:
                     # empty collected zero data
                     del self.zero_data[za]
                 print(f"Finished zeroing {a}")
+                self.logger.warning(f"Finished zeroing {a}")
             else:
                 if a in addr:
                     if addr not in self.zero_data:
