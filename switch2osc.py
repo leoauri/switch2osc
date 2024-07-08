@@ -9,6 +9,8 @@ import pprint
 import argparse
 from collections import Counter
 from math import floor
+import logging
+from pathlib import Path
 
 
 parser = argparse.ArgumentParser(
@@ -51,6 +53,7 @@ parser.add_argument(
     metavar="ADDRESS_PART",
     help="Dump collected calibration data for addresses",
 )
+parser.add_argument("--logdir", type=str, help="Directory to log movement data to")
 
 args = parser.parse_args()
 
@@ -118,17 +121,14 @@ class Stats:
         self.stamp = time.perf_counter()
 
 
-if args.stats_every is not None:
-    stats = Stats()
-
-if args.scalers:
-    scalers = {}
-    accums = {}
-    accum_scalers = {}
-
-
 class Sender:
-    def __init__(self, calibration_trigger=None, zero_triggers={}, discard_samples=10):
+    def __init__(
+        self,
+        calibration_trigger=None,
+        zero_triggers={},
+        discard_samples=10,
+        logger=None,
+    ):
         self.eps = {}
         self.last_sent = {}
         self.calibrate_until = None
@@ -137,6 +137,7 @@ class Sender:
         # for some reason, individual controllers produce bogus initial
         # values.  Throw away some of the initial calibration examples
         self.discard_samples = discard_samples
+        self.logger = logger
 
         self.zero_triggers = zero_triggers
         self.zero_until = {}
@@ -235,12 +236,14 @@ class Sender:
                 or abs(self.last_sent[addr] - val) > self.eps[addr]
             ):
                 osc.send_message(addr, val)
+                if self.logger:
+                    # log message to logger
+                    self.logger.info(f"{addr}\t{val}")
                 if args.show_addresses and addr not in self.last_sent:
                     print(f"Sent on {addr}")
                 self.last_sent[addr] = val
                 if args.stats_every is not None:
                     stats.record(addr, val)
-
 
     def send_dict(self, addr, val):
         if isinstance(val, dict):
@@ -258,6 +261,14 @@ class Sender:
                 self.send_to(addr + "/accum", accum_scalers[addr](accums[addr](val)))
 
 
+if args.stats_every is not None:
+    stats = Stats()
+
+if args.scalers:
+    scalers = {}
+    accums = {}
+    accum_scalers = {}
+
 # start OSC client
 osc = udp_client.SimpleUDPClient(
     "127.0.0.1", 7331 if args.port is None else args.port, allow_broadcast=True
@@ -269,21 +280,37 @@ if wait_time != 0:
 
 pp = pprint.PrettyPrinter(indent=4)
 
+logger = None
+if args.logdir:
+    logdir = Path(args.logdir)
+    logdir.mkdir(parents=True, exist_ok=True)
+    logfn = logdir / (time.strftime("%Y%m%d%H%M%S") + ".tsv")
+    logger = logging.getLogger("movement_logger")
+    logging.basicConfig(
+        filename=logfn, level=logging.INFO, style="{", format="{asctime}\t{message}"
+    )
+
 joycon_l = None
 joycon_r = None
 
 sender_l = Sender(
     zero_triggers={
         ("/joycon_l/buttons/shared/capture", 1): "/joycon_l",
-    }
+    },
+    logger=logger,
 )
 
 sender_r = Sender(
     zero_triggers={
         ("/joycon_r/buttons/shared/home", 1): "/joycon_r",
-    }
+    },
+    logger=logger,
 )
 
+def printlog(msg: str):
+    print(msg)
+    if logger:
+        logger.warning(msg)
 
 @schedule(interval=wait_time)
 def update_joycons():
@@ -295,7 +322,7 @@ def update_joycons():
         except (ValueError, OSError):
             joycon_l = None
         if joycon_l is not None:
-            print("Left joycon connected")
+            printlog("Left joycon connected")
             if args.dump_example:
                 pp.pprint(joycon_l.get_status())
 
@@ -305,7 +332,7 @@ def update_joycons():
         except (ValueError, OSError):
             joycon_r = None
         if joycon_r is not None:
-            print("Right joycon connected")
+            printlog("Right joycon connected")
             if args.dump_example:
                 pp.pprint(joycon_r.get_status())
 
@@ -315,7 +342,7 @@ def update_joycons():
             sender_l.send_dict("/joycon_l", jc_l)
         else:
             joycon_l = None
-            print("Lost left joycon, waiting to reconnect...")
+            printlog("Lost left joycon, waiting to reconnect...")
 
     if joycon_r is not None:
         if joycon_r.connected.is_set():
@@ -323,7 +350,8 @@ def update_joycons():
             sender_r.send_dict("/joycon_r", jc_r)
         else:
             joycon_r = None
-            print("Lost right joycon, waiting to reconnect...")
+            printlog("Lost right joycon, waiting to reconnect...")
+
 
 if args.stats_every is not None:
     schedule(stats.print_stats, interval=args.stats_every)
