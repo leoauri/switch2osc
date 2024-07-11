@@ -11,6 +11,11 @@ To run the bridge and output OSC on port 7332:
 python switch2osc.py --port 7332
 ```
 
+To log movement data to directory `movelogs`:
+```
+python switch2osc.py --logdir movelogs
+```
+
 Show more options:
 ```
 python switch2osc.py --help
@@ -20,6 +25,7 @@ usage: switch2osc.py [-h] [--port PORT] [--scalers] [--stats_every SECONDS]
                      [--show_addresses] [--show_epsilons] [--show_zeroing]
                      [--dump_example]
                      [--show_calib_data ADDRESS_PART [ADDRESS_PART ...]]
+                     [--logdir LOGDIR]
 
 Bridge Nintendo switch controllers to OSC signals.
 
@@ -35,4 +41,5 @@ options:
   --dump_example        Dump single example of captured controller data
   --show_calib_data ADDRESS_PART [ADDRESS_PART ...]
                         Dump collected calibration data for addresses
+  --logdir LOGDIR       Directory to log movement data to
 ```
