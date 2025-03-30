@@ -321,7 +321,7 @@ def update_joycons():
     if joycon_l is None:
         try:
             joycon_l = JoyCon(*get_L_id())
-        except (ValueError, OSError):
+        except (ValueError, OSError, AssertionError):
             joycon_l = None
         if joycon_l is not None:
             printlog("Left joycon connected")
@@ -331,7 +331,7 @@ def update_joycons():
     if joycon_r is None:
         try:
             joycon_r = JoyCon(*get_R_id())
-        except (ValueError, OSError):
+        except (ValueError, OSError, AssertionError):
             joycon_r = None
         if joycon_r is not None:
             printlog("Right joycon connected")
