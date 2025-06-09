@@ -17,6 +17,9 @@ parser = argparse.ArgumentParser(
     description="Bridge Nintendo switch controllers to OSC signals."
 )
 parser.add_argument(
+    "--poll_interval", metavar="MS", type=float, help="Poll JoyCons every MS milliseconds."
+)
+parser.add_argument(
     "--port", type=int, help="Port to use for OSC server (Default 7331)."
 )
 parser.add_argument(
@@ -276,7 +279,7 @@ osc = udp_client.SimpleUDPClient(
     "127.0.0.1", 7331 if args.port is None else args.port, allow_broadcast=True
 )
 
-wait_time = 0.02
+wait_time = 0.02 if args.poll_interval is None else args.poll_interval / 1000
 if wait_time != 0:
     print(f"Running at {1/wait_time} Hz, refresh {wait_time*1000} ms")
 
