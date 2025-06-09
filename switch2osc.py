@@ -281,7 +281,7 @@ osc = udp_client.SimpleUDPClient(
 
 wait_time = 0.02 if args.poll_interval is None else args.poll_interval / 1000
 if wait_time != 0:
-    print(f"Running at {1/wait_time} Hz, refresh {wait_time*1000} ms")
+    print(f"Running at {1/wait_time:.3f} Hz, refresh {wait_time*1000} ms")
 
 pp = pprint.PrettyPrinter(indent=4)
 
