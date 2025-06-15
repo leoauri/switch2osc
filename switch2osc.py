@@ -11,6 +11,23 @@ from collections import Counter
 from math import floor
 import logging
 from pathlib import Path
+import json
+import os
+
+
+CALIB_FILE = "calibration.json"
+
+def load_calibration():
+    if os.path.exists(CALIB_FILE):
+        with open(CALIB_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_calibration(key, new_data):
+    data = load_calibration()
+    data[key] = new_data
+    with open(CALIB_FILE, "w") as f:
+        json.dump(data, f, indent=4)
 
 
 parser = argparse.ArgumentParser(
@@ -127,11 +144,13 @@ class Stats:
 class Sender:
     def __init__(
         self,
+        name: str,
         calibration_trigger=None,
         zero_triggers={},
         discard_samples=10,
         logger=None,
     ):
+        self.name = name
         self.eps = {}
         self.last_sent = {}
         self.calibrate_until = None
@@ -169,6 +188,7 @@ class Sender:
                 e = None
             if e is not None:
                 self.eps[addr] = e
+        save_calibration(f"{self.name}_eps", self.eps)
         print("Finished calibration")
         if args.show_epsilons:
             print("Calculated epsilons:")
@@ -211,6 +231,7 @@ class Sender:
                         print(f"Zeroed {za} to {self.modes[za]}")
                     # empty collected zero data
                     del self.zero_data[za]
+                save_calibration(f"{self.name}_modes", self.modes)
                 print(f"Finished zeroing {a}")
                 if self.logger:
                     self.logger.warning(f"Finished zeroing {a}")
@@ -298,19 +319,27 @@ if args.logdir:
 joycon_l = None
 joycon_r = None
 
+calib_data = load_calibration()
+
 sender_l = Sender(
+    "l",
     zero_triggers={
         ("/joycon_l/buttons/shared/capture", 1): "/joycon_l",
     },
     logger=logger,
 )
+sender_l.eps = calib_data.get("l_eps", {})
+sender_l.modes = calib_data.get("l_modes", {})
 
 sender_r = Sender(
+    "r",
     zero_triggers={
         ("/joycon_r/buttons/shared/home", 1): "/joycon_r",
     },
     logger=logger,
 )
+sender_r.eps = calib_data.get("r_eps", {})
+sender_r.modes = calib_data.get("r_modes", {})
 
 def printlog(msg: str):
     print(msg)
